@@ -1,9 +1,16 @@
 // cross_verify.js — 用 OpenSSL(Node crypto) 独立验证 C++ 实现的 secp256k1 签名
 // 用法: node tests/cross_verify.js
 const crypto = require('crypto');
+const fs = require('fs');
 const { execFileSync } = require('child_process');
 
-const exe = process.argv[2] || 'core/tests/test_crypto.exe';
+function findExe() {
+  const cands = ['bin/test_crypto', 'bin/test_crypto.exe',
+                 'core/tests/test_crypto.exe', 'core/tests/test_crypto'];
+  for (const c of cands) if (fs.existsSync(c)) return c;
+  return cands[0];
+}
+const exe = process.argv[2] || findExe();
 const out = execFileSync(exe, { encoding: 'utf8' });
 const lines = out.trim().split('\n').map(l => JSON.parse(l));
 

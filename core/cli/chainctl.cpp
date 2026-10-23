@@ -50,7 +50,10 @@ static std::string num(uint64_t v) {
     while (n) s.push_back(b[--n]);
     return s;
 }
-static std::string num(int64_t v) { return v < 0 ? "-" + num((uint64_t)(-(v + 1)) + 1ULL) : num((uint64_t)v); }
+static std::string num(int64_t v) {
+    if (v < 0) return "-" + num((uint64_t)((uint64_t)(-(v + 1)) + 1ULL));
+    return num((uint64_t)v);
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) { usage(); return 1; }

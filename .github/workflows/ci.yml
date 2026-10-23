@@ -1,0 +1,35 @@
+name: build-and-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建 C++ 共识内核
+        run: bash build.sh
+
+      - name: 密码学自检（SHA-256 / HMAC 已知向量、secp256k1 生成元向量）
+        run: ./bin/test_crypto
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装 Node（用于 OpenSSL 交叉验证）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 用 OpenSSL 独立验证 C++ 的 secp256k1 签名
+        run: node tests/cross_verify.js
+
+      - name: 端到端集成测试（3 节点 / P2P / 转账 / 分叉收敛 / 全链校验）
+        run: python tests/integration.py

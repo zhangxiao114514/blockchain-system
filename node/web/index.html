@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>区块链控制台</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <h1>区块链控制台</h1>
+      <p>PoW 共识 · P2P 同步 · ECDSA 签名</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="node-picker" title="切换查看不同节点">
+      <span class="conn-dot" id="conn-dot"></span>
+      <select id="node-select"></select>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="automine">
+      <span class="slider"></span>
+      <span class="switch-text">自动挖矿</span>
+    </label>
+  </div>
+</header>
+
+<div class="banner hidden" id="banner"></div>
+
+<main>
+  <section class="kpis">
+    <div class="kpi">
+      <span class="kpi-label">区块高度</span>
+      <strong class="kpi-value" id="kpi-height">–</strong>
+      <span class="kpi-foot" id="kpi-tip">–</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">当前难度</span>
+      <strong class="kpi-value" id="kpi-difficulty">–</strong>
+      <span class="kpi-foot" id="kpi-nextdiff">–</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">待确认交易</span>
+      <strong class="kpi-value" id="kpi-mempool">–</strong>
+      <span class="kpi-foot">内存池</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">链上交易</span>
+      <strong class="kpi-value" id="kpi-txs">–</strong>
+      <span class="kpi-foot" id="kpi-accounts">–</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">累计工作量</span>
+      <strong class="kpi-value" id="kpi-work">–</strong>
+      <span class="kpi-foot">Σ 2^difficulty</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">已连接节点</span>
+      <strong class="kpi-value" id="kpi-peers">–</strong>
+      <span class="kpi-foot" id="kpi-nodeid">–</span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="panel blocks-panel">
+      <div class="panel-head">
+        <div>
+          <h2>最新区块</h2>
+          <p class="panel-sub" id="blocks-sub">点击区块可展开交易明细</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-ghost" id="btn-validate">校验全链</button>
+          <button class="btn btn-primary" id="btn-mine">立即出块</button>
+        </div>
+      </div>
+      <div class="blocks" id="blocks"></div>
+    </div>
+
+    <aside class="side">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>我的钱包</h2>
+          <button class="btn btn-mini" id="btn-new-wallet">新建</button>
+        </div>
+        <div class="wallets" id="wallets"></div>
+        <p class="hint">私钥由本节点加密保管，页面不会展示私钥。</p>
+      </div>
+
+      <div class="panel">
+        <h2>发起转账</h2>
+        <form id="transfer-form" class="form">
+          <label>付款钱包
+            <select id="tx-from"></select>
+          </label>
+          <label>收款地址
+            <input id="tx-to" placeholder="0x…" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="row">
+            <label>金额
+              <input id="tx-amount" placeholder="1.0" inputmode="decimal" autocomplete="off">
+            </label>
+            <label>手续费
+              <input id="tx-fee" value="0.001" inputmode="decimal" autocomplete="off">
+            </label>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit" id="btn-send">签名并广播</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>交易池 <span class="badge" id="mempool-count">0</span></h2>
+        </div>
+        <div class="mempool" id="mempool"></div>
+      </div>
+
+      <div class="panel">
+        <h2>网络节点</h2>
+        <div class="peers" id="peers"></div>
+      </div>
+    </aside>
+  </section>
+
+  <footer class="foot">
+    <span id="foot-genesis">创世块 –</span>
+    <span id="foot-verify"></span>
+  </footer>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

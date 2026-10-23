@@ -1,0 +1,24 @@
+# 运行时数据（链、交易池、钱包库、日志）
+data/
+!data/.gitkeep
+
+# 构建产物
+bin/
+build/
+*.exe
+*.o
+*.obj
+*.a
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 工作区内部数据
+.workbuddy-ai/

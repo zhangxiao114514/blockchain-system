@@ -159,14 +159,21 @@ class Engine:
     def new_wallet(self) -> dict:
         return self.call("wallet_new", timeout=20)
 
-    def sign_tx(self, private_key: str, to: str, amount: int, fee: int, nonce: int) -> dict:
+    def sign_tx(self, private_key: str, to: str, amount: int, fee: int, nonce: int,
+                tx_type: str = "transfer", code: str = "", input: str = "",
+                gas_limit: int = 0, target_chain_id: int = 0) -> dict:
         return self.call(
             "sign_tx",
+            type=tx_type,
             private_key=private_key,
             to=to,
             amount=amount,
             fee=fee,
             nonce=nonce,
+            code=code,
+            input=input,
+            gas_limit=gas_limit,
+            target_chain_id=target_chain_id,
             timestamp=int(time.time() * 1000),
         )
 
@@ -190,3 +197,23 @@ class Engine:
 
     def mempool(self) -> dict:
         return self.call("mempool")
+
+    # ---------- 合约 ----------
+    def contract(self, address: str) -> dict:
+        return self.call("contract", address=address)
+
+    def contracts(self) -> dict:
+        return self.call("contracts")
+
+    def abi_encode(self, signature: str, types: list, values: list) -> dict:
+        return self.call("abi_encode", signature=signature, types=types, values=values)
+
+    # ---------- 事件日志 / 跨链 ----------
+    def logs(self, from_block: int = 0, limit: int = 200, address: str = "", topic: str = "") -> dict:
+        return self.call("logs", from_block=from_block, limit=limit, address=address, topic=topic)
+
+    def bridge(self) -> dict:
+        return self.call("bridge")
+
+    def merkle_build(self, leaves: list) -> dict:
+        return self.call("merkle_build", leaves=leaves)

@@ -65,6 +65,8 @@ def cmd_run(args):
         auto_mine=args.auto_mine,
         passphrase=args.passphrase,
         mine_interval_ms=args.mine_interval,
+        chain_id=args.chain_id,
+        relayer=args.relayer,
     )
 
     async def main():
@@ -143,6 +145,63 @@ def cmd_send(args):
     return 0
 
 
+def cmd_deploy(args):
+    code = args.code
+    if os.path.isfile(code):
+        with open(code, "r", encoding="utf-8") as f:
+            code = f.read().strip()
+    r = http_json(args.port, "/api/contracts/deploy", "POST",
+                  {"from": args.from_addr, "code": code, "gas_limit": args.gas, "fee": args.fee}, timeout=60)
+    print(f"合约已部署: {r.get('contract_address')}  tx={r.get('txid')}")
+    return 0
+
+
+def cmd_call(args):
+    body = {"from": args.from_addr, "to": args.to, "gas_limit": args.gas, "fee": args.fee}
+    if args.method:
+        body["method"] = args.method
+        body["args"] = args.args or []
+    elif args.input:
+        body["input"] = args.input
+    r = http_json(args.port, "/api/contracts/call", "POST", body, timeout=60)
+    print(f"调用已提交: {r.get('txid')}")
+    return 0
+
+
+def cmd_contract(args):
+    r = http_json(args.port, f"/api/contract?address={args.address}")
+    print(f"合约 {r.get('address')}  creator={r.get('creator')}  code={len(r.get('code',''))//2} 字节")
+    for k, v in (r.get("storage") or {}).items():
+        print(f"  slot {k} = {v}")
+    return 0
+
+
+def cmd_logs(args):
+    r = http_json(args.port, f"/api/logs?from_block={args.from_block}&limit={args.limit}")
+    for lg in r.get("logs", []):
+        print(f"  #{lg['block_index']} {lg['address']} topics={lg['topics'][:2]}")
+    print(f"共 {len(r.get('logs', []))} 条事件")
+    return 0
+
+
+def cmd_bridge(args):
+    r = http_json(args.port, "/api/bridge")
+    print(f"链 {r['chain_id']} 托管地址 {r['address']}")
+    print(f"  出向序列号 {r['seq']}  锁定 {r['locked_str']}  已铸造 {r['minted_str']}")
+    print(f"  已认领 {r['processed_count']}  中继 {r.get('relayer') or '(开发模式)'}")
+    for k, v in (r.get("relay_roots") or {}).items():
+        print(f"  源链 {k} 根 {v['root'][:16]}… 高度 {v['height']}")
+    return 0
+
+
+def cmd_xfer(args):
+    r = http_json(args.port, "/api/bridge/transfer", "POST",
+                  {"from": args.from_addr, "to": args.to, "target_chain_id": args.target_chain,
+                   "amount": args.amount, "fee": args.fee}, timeout=60)
+    print(f"跨链交易已提交: {r.get('txid')}")
+    return 0
+
+
 def cmd_peers(args):
     r = http_json(args.port, "/api/peers")
     for p in r["peers"]:
@@ -167,6 +226,8 @@ def main():
     r.add_argument("--passphrase", default=None)
     r.add_argument("--log", default=None, help="日志文件路径（后台运行时使用）")
     r.add_argument("--mine-interval", type=int, default=1500, help="自动挖矿时的出块间隔（毫秒）")
+    r.add_argument("--chain-id", type=int, default=1001, help="链 ID（跨链隔离）")
+    r.add_argument("--relayer", default="", help="可信中继地址（留空为开发模式）")
     r.set_defaults(func=cmd_run)
 
     for name, fn, help_text in [
@@ -187,6 +248,49 @@ def main():
     f.add_argument("--address", required=True)
     f.add_argument("--amount", default="100")
     f.set_defaults(func=cmd_faucet)
+
+    d = sub.add_parser("deploy", help="部署合约")
+    d.add_argument("--port", type=int, default=3001)
+    d.add_argument("--from", dest="from_addr", required=True)
+    d.add_argument("--code", required=True, help="字节码 hex 或文件路径")
+    d.add_argument("--gas", type=int, default=200000)
+    d.add_argument("--fee", default="0.001")
+    d.set_defaults(func=cmd_deploy)
+
+    c = sub.add_parser("call", help="调用合约")
+    c.add_argument("--port", type=int, default=3001)
+    c.add_argument("--from", dest="from_addr", required=True)
+    c.add_argument("--to", required=True)
+    c.add_argument("--method", default="", help="如 transfer(address,uint256)")
+    c.add_argument("--args", nargs="*", default=[])
+    c.add_argument("--input", default="", help="原始 calldata hex")
+    c.add_argument("--gas", type=int, default=200000)
+    c.add_argument("--fee", default="0.001")
+    c.set_defaults(func=cmd_call)
+
+    ct = sub.add_parser("contract", help="查看合约")
+    ct.add_argument("--port", type=int, default=3001)
+    ct.add_argument("--address", required=True)
+    ct.set_defaults(func=cmd_contract)
+
+    lg = sub.add_parser("logs", help="查询事件日志")
+    lg.add_argument("--port", type=int, default=3001)
+    lg.add_argument("--from-block", type=int, default=0)
+    lg.add_argument("--limit", type=int, default=50)
+    lg.set_defaults(func=cmd_logs)
+
+    bg = sub.add_parser("bridge", help="查看跨链桥状态")
+    bg.add_argument("--port", type=int, default=3001)
+    bg.set_defaults(func=cmd_bridge)
+
+    xf = sub.add_parser("xfer", help="跨链转账")
+    xf.add_argument("--port", type=int, default=3001)
+    xf.add_argument("--from", dest="from_addr", required=True)
+    xf.add_argument("--to", required=True)
+    xf.add_argument("--target-chain", type=int, required=True)
+    xf.add_argument("--amount", required=True)
+    xf.add_argument("--fee", default="0.001")
+    xf.set_defaults(func=cmd_xfer)
 
     s = sub.add_parser("send", help="转账")
     s.add_argument("--port", type=int, default=3001)

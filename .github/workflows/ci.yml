@@ -31,5 +31,11 @@ jobs:
       - name: 用 OpenSSL 独立验证 C++ 的 secp256k1 签名
         run: node tests/cross_verify.js
 
+      - name: 内核单元测试（VM 指令 / gas / ABI / 合约存储 / 桥安全）
+        run: python tests/unit_core.py
+
       - name: 端到端集成测试（3 节点 / P2P / 转账 / 分叉收敛 / 全链校验）
         run: python tests/integration.py
+
+      - name: 跨链测试（托管锁定 / 中继 / 默克尔证明 / 防重放 / 防超发）
+        run: python tests/crosschain.py

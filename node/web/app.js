@@ -101,8 +101,11 @@ function renderBlocks(blocks) {
     const txs = b.transactions || [];
     const rows = txs.map((t) => {
       const coin = t.type === 'coinbase';
+      const label = { coinbase: '出块奖励', transfer: '转账', deploy_contract: '部署合约',
+                      contract_call: '调用合约', cross_transfer: '跨链' }[t.type] || t.type;
+      const cls = coin ? 'coin' : (t.type === 'transfer' ? 'xfer' : 'contract');
       return `<div class="txrow">
-        <span class="tag ${coin ? 'coin' : 'xfer'}">${coin ? '出块奖励' : '转账'}</span>
+        <span class="tag ${cls}">${label}</span>
         <span class="txaddr" title="${esc(coin ? t.to : t.from + ' → ' + t.to)}">
           ${coin ? '系统 → ' + shortAddr(t.to) : shortAddr(t.from) + ' → ' + shortAddr(t.to)}
         </span>

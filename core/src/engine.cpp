@@ -55,6 +55,10 @@ static J handle(const J& req, bool& quit) {
         if (const J* d = req.find("retarget_interval")) p.retarget_interval = (int)d->i(10);
         if (const J* d = req.find("halving_interval")) p.halving_interval = (uint32_t)d->i(210000);
         if (const J* d = req.find("max_block_txs")) p.max_block_txs = (size_t)d->i(500);
+        if (const J* d = req.find("chain_id")) p.chain_id = (uint64_t)d->i(1001);
+        if (const J* d = req.find("relayer")) p.relayer = d->s();
+        if (const J* d = req.find("max_code_size")) p.max_code_size = (uint64_t)d->i(16384);
+        if (const J* d = req.find("default_gas_limit")) p.default_gas_limit = (uint64_t)d->i(200000);
         std::string datadir = req.find("datadir") ? req.find("datadir")->s() : "data/chain";
         if (g_chain) delete g_chain;
         g_chain = new Chain(p);
@@ -117,15 +121,19 @@ static J handle(const J& req, bool& quit) {
         std::string pub, addr;
         if (!ecc::derive_public(priv, pub, addr)) return err_resp("私钥非法");
         Tx t;
-        t.type = "transfer";
+        t.type = req.find("type") ? req.find("type")->s() : "transfer";
         t.from = addr;
         t.to = req.find("to") ? req.find("to")->s() : "";
         t.amount = (uint64_t)(req.find("amount") ? req.find("amount")->i() : 0);
         t.fee = (uint64_t)(req.find("fee") ? req.find("fee")->i() : 0);
         t.nonce = (uint64_t)(req.find("nonce") ? req.find("nonce")->i() : 0);
         t.timestamp = req.find("timestamp") ? req.find("timestamp")->i() : (int64_t)time(0) * 1000;
+        t.code = req.find("code") ? req.find("code")->s() : "";
+        t.input = req.find("input") ? req.find("input")->s() : "";
+        t.gas_limit = (uint64_t)(req.find("gas_limit") ? req.find("gas_limit")->i() : 0);
+        t.target_chain_id = (uint64_t)(req.find("target_chain_id") ? req.find("target_chain_id")->i() : 0);
         t.pubkey = pub;
-        t.id = tx_compute_id(t);
+        t.id = tx_compute_id(t, g_chain->chain_id());
         t.signature = ecc::sign(t.id, priv);
         if (t.signature.empty()) return err_resp("签名失败");
         J r = ok_resp();
@@ -249,6 +257,78 @@ static J handle(const J& req, bool& quit) {
         r.set("tx", tx_to_json(t));
         r.set("block_index", J::num((int64_t)bi));
         r.set("confirmed", J::boolean(bi != (uint64_t)-1));
+        return r;
+    }
+
+    if (cmd == "contract") {
+        std::string addr = req.find("address") ? req.find("address")->s() : "";
+        Contract c;
+        if (!g_chain->contract_lookup(addr, c)) return err_resp("合约不存在");
+        J r = ok_resp();
+        r.set("address", J::str(addr));
+        r.set("code", J::str(c.code));
+        r.set("creator", J::str(c.creator));
+        r.set("created_at", J::num((int64_t)c.created_at));
+        J st = J::obj();
+        for (std::map<std::string, std::string>::const_iterator it = c.storage.begin(); it != c.storage.end(); ++it)
+            st.set(it->first, J::str(it->second));
+        r.set("storage", st);
+        return r;
+    }
+
+    if (cmd == "contracts") {
+        J r = ok_resp();
+        r.set("contracts", g_chain->contracts_json());
+        return r;
+    }
+
+    if (cmd == "logs") {
+        uint64_t from_block = (uint64_t)(req.find("from_block") ? req.find("from_block")->i(0) : 0);
+        size_t limit = (size_t)(req.find("limit") ? req.find("limit")->i(200) : 200);
+        std::string addr = req.find("address") ? req.find("address")->s() : "";
+        std::string topic = req.find("topic") ? req.find("topic")->s() : "";
+        J r = ok_resp();
+        r.set("logs", g_chain->logs_json(from_block, limit, addr, topic));
+        return r;
+    }
+
+    if (cmd == "bridge") {
+        J r = ok_resp();
+        J b = g_chain->bridge_json();
+        for (size_t i = 0; i < b.keys().size(); ++i) r.set(b.keys()[i], *b.find(b.keys()[i]));
+        return r;
+    }
+
+    if (cmd == "merkle_build") {
+        const J* leaves = req.find("leaves");
+        if (!leaves) return err_resp("缺少 leaves");
+        std::vector<std::string> v;
+        for (size_t i = 0; i < leaves->size(); ++i) v.push_back(leaves->at(i).s());
+        vm::MerkleBuildResult mb = vm::merkle_build(v);
+        J r = ok_resp();
+        r.set("root", J::str(mb.root));
+        J proofs = J::arr();
+        for (size_t i = 0; i < mb.proofs.size(); ++i) {
+            J p = J::arr();
+            for (size_t k = 0; k < mb.proofs[i].size(); ++k) p.push(J::str(mb.proofs[i][k]));
+            proofs.push(p);
+        }
+        r.set("proofs", proofs);
+        return r;
+    }
+
+    if (cmd == "abi_encode") {
+        std::string sig = req.find("signature") ? req.find("signature")->s() : "";
+        std::vector<std::string> types, values;
+        if (const J* t = req.find("types"))
+            for (size_t i = 0; i < t->size(); ++i) types.push_back(t->at(i).s());
+        if (const J* v = req.find("values"))
+            for (size_t i = 0; i < v->size(); ++i) values.push_back(v->at(i).s());
+        std::string hex = vm::abi::encode_call(sig, types, values);
+        if (hex.empty()) return err_resp("ABI 编码失败（检查签名与参数类型）");
+        J r = ok_resp();
+        r.set("calldata", J::str(hex));
+        r.set("selector", J::str(vm::abi::selector(sig)));
         return r;
     }
 

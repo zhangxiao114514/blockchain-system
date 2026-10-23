@@ -96,7 +96,7 @@ if [ "$(uname -s 2>/dev/null | cut -c1-5)" = "MINGW" ] || [ "$OS" = "Windows_NT"
   SUFFIX=".exe"
 fi
 
-SRC="core/src/crypto.cpp core/src/json.cpp core/src/chain.cpp"
+SRC="core/src/crypto.cpp core/src/json.cpp core/src/vm.cpp core/src/chain.cpp"
 
 echo "[1/3] 编译共识引擎 chain-engine$SUFFIX"
 $CXX $FLAGS $SRC core/src/engine.cpp -o "bin/chain-engine$SUFFIX" $LIBS

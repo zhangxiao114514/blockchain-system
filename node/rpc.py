@@ -19,6 +19,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import mimetypes
 import os
@@ -173,6 +174,24 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/validate":
             r = n.engine.validate()
             self._send_json(r)
+        elif path == "/api/contracts":
+            r = n.engine.contracts()
+            self._send_json(r)
+        elif path == "/api/contract":
+            addr = (q.get("address") or [""])[0]
+            if not addr:
+                self._send_json({"ok": False, "error": "缺少 address"}, 400)
+                return
+            self._send_json(n.engine.contract(address=addr))
+        elif path == "/api/logs":
+            from_block = int((q.get("from_block") or ["0"])[0])
+            limit = int((q.get("limit") or ["200"])[0])
+            addr = (q.get("address") or [""])[0]
+            topic = (q.get("topic") or [""])[0]
+            r = n.engine.logs(from_block=from_block, limit=limit, address=addr, topic=topic)
+            self._send_json(r)
+        elif path == "/api/bridge":
+            self._send_json(n.engine.bridge())
         elif path == "/api/tx":
             tid = (q.get("id") or [""])[0]
             r = n.engine.call("tx", id=tid)
@@ -198,6 +217,17 @@ class Handler(BaseHTTPRequestHandler):
                 raise RuntimeError(w.get("error", "生成钱包失败"))
             item = n.keystore.add(w["address"], w["public_key"], w["private_key"],
                                   label=str(body.get("label") or "")[:20])
+            self._send_json({"ok": True, "wallet": {"address": item["address"], "label": item["label"]}})
+        elif path == "/api/wallets/import":
+            pk = str(body.get("private_key") or "").strip()
+            if not pk:
+                raise ValueError("缺少 private_key")
+            w = n.engine.call("wallet_from_private", private_key=pk)
+            if not w.get("ok"):
+                raise ValueError(w.get("error", "私钥非法"))
+            item = n.keystore.add(w["address"], w["public_key"], w["private_key"],
+                                  label=str(body.get("label") or "导入钱包")[:20])
+            n.log(f"已导入钱包 {item['address']}")
             self._send_json({"ok": True, "wallet": {"address": item["address"], "label": item["label"]}})
         elif path in ("/api/wallets/delete", "/api/wallet/delete"):
             addr = str(body.get("address") or "")
@@ -225,6 +255,56 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("地址格式非法")
             tx = n.faucet(addr, amount)
             self._send_json({"ok": True, "txid": tx["id"]})
+        elif path == "/api/tx/raw":
+            # 提交外部已签名交易（硬件钱包 / 跨链测试 / 离线签名场景）
+            tx = body.get("tx")
+            if not isinstance(tx, dict):
+                raise ValueError("缺少 tx 对象")
+            r = n.engine.submit_tx(tx)
+            if not r.get("ok"):
+                raise ValueError(r.get("error", "交易被拒绝"))
+            n.p2p.broadcast_threadsafe({"type": "tx", "tx": tx})
+            n.request_block()
+            self._send_json({"ok": True, "txid": r.get("txid")})
+        elif path == "/api/contracts/deploy":
+            frm = str(body.get("from") or "")
+            code = str(body.get("code") or "")
+            gas = int(body.get("gas_limit") or 200000)
+            tx = n.deploy_contract(frm, code, body.get("fee", "0.001"), gas)
+            # 合约地址由 (chain_id, from, nonce) 确定性派生，与 C++ 侧算法一致
+            addr = "0x" + hashlib.sha256(
+                f"create|{n.chain_id}|{frm}|{tx['nonce']}".encode()).hexdigest()[:40]
+            self._send_json({"ok": True, "txid": tx["id"], "contract_address": addr})
+        elif path == "/api/contracts/call":
+            frm = str(body.get("from") or "")
+            to = str(body.get("to") or "")
+            if not to.startswith("0x") or len(to) != 42:
+                raise ValueError("合约地址格式非法")
+            tx = n.call_contract(frm, to, method=str(body.get("method") or ""),
+                                 args=body.get("args") or [], input_hex=str(body.get("input") or ""),
+                                 fee=body.get("fee", "0.001"), gas_limit=int(body.get("gas_limit") or 200000))
+            self._send_json({"ok": True, "txid": tx["id"]})
+        elif path == "/api/bridge/transfer":
+            frm = str(body.get("from") or "")
+            to = str(body.get("to") or "")
+            if not to.startswith("0x") or len(to) != 42:
+                raise ValueError("目标地址格式非法")
+            tx = n.cross_transfer(frm, to, int(body.get("target_chain_id") or 0),
+                                  body.get("amount", "0"), body.get("fee", "0.001"))
+            self._send_json({"ok": True, "txid": tx["id"]})
+        elif path == "/api/bridge/commit":
+            tx = n.commit_relay_root(int(body.get("src_chain_id") or 0), int(body.get("height") or 0),
+                                     str(body.get("root") or ""), body.get("fee", "0.001"))
+            self._send_json({"ok": True, "txid": tx["id"]})
+        elif path == "/api/bridge/claim":
+            tx = n.claim_cross(int(body.get("src_chain_id") or 0), int(body.get("seq") or 0),
+                               int(body.get("index") or 0), str(body.get("to") or ""),
+                               int(body.get("amount") or 0), str(body.get("root") or ""),
+                               body.get("proof") or [], body.get("fee", "0.001"))
+            self._send_json({"ok": True, "txid": tx["id"]})
+        elif path == "/api/_merkle":
+            leaves = body.get("leaves") or []
+            self._send_json(n.engine.merkle_build(leaves))
         elif path == "/api/mine":
             count = int(body.get("count", 1))
             blocks = n.mine_once(count)

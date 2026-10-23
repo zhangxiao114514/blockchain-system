@@ -174,6 +174,8 @@ main{max-width:1440px;margin:0 auto;padding:20px 28px 40px}
 .tag{font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 6px;text-align:center}
 .tag.coin{background:var(--amber-soft);color:#a16207}
 .tag.xfer{background:var(--green-soft);color:#15803d}
+.tag.contract{background:#eef2ff;color:#4338ca}
+.tag.cross{background:#fdf2f8;color:#a21caf}
 .txaddr{font-family:var(--mono);color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .txamt{font-family:var(--mono);text-align:right;color:#111827;font-weight:600}
 .txamt small{color:var(--muted-2);font-weight:400}

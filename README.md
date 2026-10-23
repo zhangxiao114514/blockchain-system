@@ -7,7 +7,12 @@
 
 一条**可运行、可交互、可校验**的完整区块链：自研 SHA-256 与 secp256k1 ECDSA、PoW 共识、
 多节点 P2P 同步、最长链分叉重组、加密钱包、HTTP API 与浏览器控制台。
-不依赖任何第三方库（无 OpenSSL、无 Boost、无 pip 包），在 Windows / MinGW 下开箱即用。
+
+**v0.2 新增**：精简 EVM 子集合约（部署/调用/存储/事件日志/ABI/gas）、
+可信中继跨链（托管合约 + 默克尔证明 + 全局序列号 + chain_id 隔离）。
+不依赖任何第三方库（无 OpenSSL、无 Boost、无 pip 包），Windows / Linux 开箱即用。
+
+> 合约与 ABI → [docs/CONTRACT.md](docs/CONTRACT.md) ｜ 跨链设计 → [docs/BRIDGE.md](docs/BRIDGE.md) ｜ 接口与 curl → [docs/API.md](docs/API.md)
 
 ---
 
@@ -19,13 +24,15 @@
 │  node.py     编排/挖矿调度          p2p.py     asyncio TCP 对等网络（gossip）      │
 │  keystore.py 加密钱包库            engine.py  引擎客户端（子进程 + 行式 JSON）     │
 │  web/        浏览器控制台（原生 JS，零依赖）                                      │
+│  ../bridge/relayer.py  可信中继：扫描事件 → 建 Merkle 树 → 提交根 → 认领          │
 └───────────────────────────────────┬──────────────────────────────────────────────┘
                                     │ stdin/stdout 行式 JSON 协议
 ┌───────────────────────────────────▼──────────────────────────────────────────────┐
 │                        C++ 共识内核（core/，静态库 libchaincore）                 │
 │  crypto.cpp  SHA-256 / HMAC-SHA256 / secp256k1 ECDSA（RFC6979）/ Base64          │
-│  chain.cpp   区块与交易模型、Merkle 树、PoW 挖矿、难度调整、账户状态机、          │
-│              交易池、分叉重组、全链校验、NDJSON 持久化                            │
+│  vm.cpp      精简 EVM 子集（256 位栈机 / gas / 存储槽 / 事件日志）+ ABI + Merkle  │
+│  chain.cpp   区块与交易模型、PoW、难度调整、账户与合约状态机、交易池、            │
+│              分叉重组、全链校验、跨链托管桥、NDJSON 持久化                        │
 │  json.cpp    极简 JSON DOM（解析 + 序列化）                                       │
 │  engine.cpp  引擎进程：把内核能力暴露为命令                                       │
 │  cli/chainctl.cpp  C++ 运维命令行（可完全脱离 Python 使用）                        │
@@ -108,6 +115,10 @@ python node/cli.py send     --port 3001 --from 0x... --to 0x... --amount 1.5
 | 出块节流 | 自动挖矿时空块间隔 1500ms（`--mine-interval`），避免空转刷块 |
 | 即时确认 | 提交交易后立刻触发一次出块，**到账实测 ~0.6s** |
 | 交易模型 | 账户模型：`nonce` 防重放，余额与 nonce 由链上状态推导 |
+| 交易类型 | `transfer` / `coinbase` / `deploy_contract` / `contract_call` / `cross_transfer` |
+| 事件日志 | 区块新增 `logs` 字段与 `logs_root`（Merkle 根参与区块哈希） |
+| 合约 | 256 位栈机、gas 计量、32 字节存储槽、ABI 编解码、确定性合约地址 |
+| 跨链 | 托管桥 + 默克尔证明中继，`chain_id` 隔离 + 全局序列号防重放 |
 | 分叉选择 | 累计工作量（Σ2^difficulty）更大者胜；等长不切换 |
 | 区块上限 | 500 笔交易 |
 | 金额精度 | 1 币 = 1e8 最小单位，全整数运算（无浮点误差） |
@@ -119,6 +130,8 @@ PoW 达标、Merkle 根匹配、首笔必须是出块奖励且金额正确、每
 ---
 
 ## 5. HTTP API
+
+完整接口表与 curl 示例见 **[docs/API.md](docs/API.md)**，这里只列主干：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -138,6 +151,12 @@ PoW 达标、Merkle 根匹配、首笔必须是出块奖励且金额正确、每
 | POST | `/api/faucet` | 领测试币 `{address,amount}` |
 | POST | `/api/mine` | 立即出块 `{count}` |
 | POST | `/api/automine` | 开关自动挖矿 `{enabled}` |
+| POST | `/api/contracts/deploy` | 部署合约 `{from,code,gas_limit}` |
+| POST | `/api/contracts/call` | 调用合约 `{from,to,method,args}` |
+| GET | `/api/contract?address=` | 合约详情与存储槽 |
+| GET | `/api/logs` | 事件日志 |
+| POST | `/api/bridge/transfer` | 发起跨链转账 |
+| GET | `/api/bridge` | 跨链桥状态 |
 
 金额一律用十进制字符串（如 `"12.5"`），内部换算为 1e8 最小单位整数。
 
@@ -173,9 +192,16 @@ node tests/cross_verify.js
 
 # 端到端集成测试：3 节点 / P2P 同步 / 领币 / 转账 / 分叉收敛 / 全链校验 / 持久化
 python tests/integration.py
+
+# 内核单元测试：VM 指令 / gas / ABI / 合约存储 / 跨链桥安全
+python tests/unit_core.py
+
+# 双链跨链测试：托管锁定 / 中继 / 默克尔证明 / 防重放 / 防超发 / chain_id 隔离
+python tests/crosschain.py
 ```
 
-当前结果：密码学自检通过，OpenSSL 交叉验证 24/24，集成测试 18/18。
+当前结果：密码学自检通过，OpenSSL 交叉验证 24/24，集成测试 18/18，
+内核单元测试 18/18，跨链测试 16/16。
 
 ---
 
@@ -186,21 +212,34 @@ python tests/integration.py
 ├── build.sh                # 构建脚本（CMake 优先，g++ 兜底）
 ├── start.py                # 一键启动多节点网络
 ├── core/                   # C++ 共识内核
-│   ├── include/            # crypto.h / chain.h / json.h
-│   ├── src/                # crypto.cpp / chain.cpp / json.cpp / engine.cpp
+│   ├── include/            # crypto.h / chain.h / vm.h / json.h
+│   ├── src/                # crypto.cpp / vm.cpp / chain.cpp / json.cpp / engine.cpp
 │   ├── cli/chainctl.cpp    # C++ 运维命令行
 │   └── tests/test_crypto.cpp
 ├── node/                   # Python 节点服务
 │   ├── cli.py  node.py  engine.py  p2p.py  rpc.py  keystore.py  util.py
 │   └── web/                # 控制台（index.html / app.js / style.css）
-├── tests/                  # cross_verify.js / integration.py
+├── bridge/relayer.py       # 跨链可信中继
+├── contracts/              # 示例合约（vault.hex / vault.asm）
+├── docs/                   # API.md / CONTRACT.md / BRIDGE.md
+├── start_dual.py           # 双链跨链调试环境
+├── tests/                  # cross_verify.js / integration.py / unit_core.py / crosschain.py
 ├── bin/                    # 编译产物
 └── data/                   # 各节点数据目录（链、交易池、加密钱包库、日志）
 ```
 
 ---
 
-## 9. 已知边界
+## 9. 版本与兼容性
+
+**v0.2 破坏性变更**（链数据格式升级，旧数据会被自动备份为 `blocks.ndjson.corrupt` 并重置）：
+
+- 区块新增 `logs` / `logs_root` 字段，区块哈希计算加入 `logs_root`
+- 交易哈希加入 `chain_id`、`code`、`input`、`gas_limit`、`target_chain_id`
+- 创世块包含 `chain_id`，不同链的创世哈希不同
+- 启动脚本参数保持兼容（`--datadir/--port/--p2p/--auto-mine` 语义不变），新增 `--chain-id/--relayer`
+
+## 10. 已知边界
 
 - 单机多进程模拟网络，未做跨机器 NAT 穿透与加密传输（P2P 明文 JSON，仅本地回环）。
 - 挖矿为单线程协作式（每次 25000 次哈希后让出 CPU），保证 RPC 不被阻塞。

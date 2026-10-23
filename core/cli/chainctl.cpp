@@ -73,6 +73,9 @@ int main(int argc, char** argv) {
     Params p;
     std::string pd = arg_value(argc, argv, "--difficulty", "");
     if (!pd.empty()) p.initial_difficulty = (uint32_t)atoi(pd.c_str());
+    std::string pc = arg_value(argc, argv, "--chain-id", "");
+    if (!pc.empty()) p.chain_id = (uint64_t)strtoull(pc.c_str(), 0, 10);
+    p.relayer = arg_value(argc, argv, "--relayer", "");
 
     Chain chain(p);
     std::string err;
@@ -115,6 +118,34 @@ int main(int argc, char** argv) {
         int idx = pos(0).empty() ? (int)chain.height() : atoi(pos(0).c_str());
         if (idx < 0 || (size_t)idx >= chain.block_count()) { fprintf(stderr, "区块不存在\n"); return 1; }
         printf("%s\n", block_to_json(chain.blocks()[(size_t)idx], true).dump().c_str());
+        return 0;
+    }
+    if (cmd == "contract") {
+        std::string addr = pos(0);
+        Contract c;
+        if (!chain.contract_lookup(addr, c)) { fprintf(stderr, "合约不存在\n"); return 1; }
+        J j = J::obj();
+        j.set("address", J::str(addr));
+        j.set("code", J::str(c.code));
+        j.set("creator", J::str(c.creator));
+        J st = J::obj();
+        for (std::map<std::string, std::string>::const_iterator it = c.storage.begin(); it != c.storage.end(); ++it)
+            st.set(it->first, J::str(it->second));
+        j.set("storage", st);
+        printf("%s\n", j.dump().c_str());
+        return 0;
+    }
+    if (cmd == "contracts") {
+        printf("%s\n", chain.contracts_json().dump().c_str());
+        return 0;
+    }
+    if (cmd == "logs") {
+        uint64_t from = pos(0).empty() ? 0 : (uint64_t)atoi(pos(0).c_str());
+        printf("%s\n", chain.logs_json(from, 200, "", "").dump().c_str());
+        return 0;
+    }
+    if (cmd == "bridge") {
+        printf("%s\n", chain.bridge_json().dump().c_str());
         return 0;
     }
     if (cmd == "mempool") {
@@ -169,7 +200,7 @@ int main(int argc, char** argv) {
         t.nonce = acc.nonce;
         t.timestamp = (int64_t)time(0) * 1000;
         t.pubkey = pub;
-        t.id = tx_compute_id(t);
+        t.id = tx_compute_id(t, chain.chain_id());
         t.signature = ecc::sign(t.id, key);
         if (!chain.submit_tx(t, err)) { fprintf(stderr, "交易被拒: %s\n", err.c_str()); return 1; }
         printf("{\"txid\":\"%s\",\"from\":\"%s\",\"to\":\"%s\",\"amount\":\"%s\"}\n", t.id.c_str(), t.from.c_str(),

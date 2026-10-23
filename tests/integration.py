@@ -135,9 +135,11 @@ def main():
                         timeout=45)
         check("转账 25.5 币成功确认", ok)
 
+        # 等另一节点同步到同一状态再断言（跨节点可见性）
+        expect = int(100 * 10**8 - 25.5 * 10**8 - 10**5)
+        wait_until(lambda: int(api(3002, f"/api/account?address={addr}")["balance"]) == expect, 30)
         src = api(3002, f"/api/account?address={addr}")
-        check("付款方余额扣减正确（100 - 25.5 - 0.001）",
-              int(src["balance"]) == int(100 * 10**8 - 25.5 * 10**8 - 10**5),
+        check("付款方余额扣减正确（100 - 25.5 - 0.001）", int(src["balance"]) == expect,
               f"{int(src['balance']) / 10**8:.3f}")
         check("付款方 nonce 递增", int(src["nonce"]) == 1, f"nonce={src['nonce']}")
 

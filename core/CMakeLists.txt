@@ -4,6 +4,7 @@
 add_library(chaincore STATIC
     src/crypto.cpp
     src/json.cpp
+    src/vm.cpp
     src/chain.cpp
 )
 target_include_directories(chaincore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

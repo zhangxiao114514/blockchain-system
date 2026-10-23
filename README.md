@@ -1,5 +1,10 @@
 # 区块链系统（C++ 共识内核 + Python 节点服务）
 
+[![build-and-test](https://github.com/zhangxiao114514/blockchain-system/actions/workflows/ci.yml/badge.svg)](https://github.com/zhangxiao114514/blockchain-system/actions/workflows/ci.yml)
+[![C++14](https://img.shields.io/badge/C%2B%2B-14-blue.svg)](#)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab.svg)](#)
+[![deps](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#)
+
 一条**可运行、可交互、可校验**的完整区块链：自研 SHA-256 与 secp256k1 ECDSA、PoW 共识、
 多节点 P2P 同步、最长链分叉重组、加密钱包、HTTP API 与浏览器控制台。
 不依赖任何第三方库（无 OpenSSL、无 Boost、无 pip 包），在 Windows / MinGW 下开箱即用。

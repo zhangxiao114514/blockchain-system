@@ -25,7 +25,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PY = sys.executable
 CLI = os.path.join(ROOT, "node", "cli.py")
-CHAINCTL = os.path.join(ROOT, "bin", "chainctl.exe" if os.name == "nt" else "bin/chainctl")
+CHAINCTL = os.path.join(ROOT, "bin", "chainctl.exe" if os.name == "nt" else "chainctl")
 
 PLAN = [
     # (name, chain_id, http_port, p2p_port)
@@ -71,7 +71,7 @@ def main():
     ap.add_argument("--faucet", default="60")
     args = ap.parse_args()
 
-    engine = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "bin/chain-engine")
+    engine = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "chain-engine")
     if not os.path.exists(engine):
         print("未找到引擎，正在编译…")
         if subprocess.call(["bash", os.path.join(ROOT, "build.sh")], cwd=ROOT) != 0:

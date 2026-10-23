@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENGINE = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "bin/chain-engine")
+ENGINE = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "chain-engine")
 COIN = 100_000_000
 
 results = []

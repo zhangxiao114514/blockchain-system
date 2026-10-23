@@ -30,7 +30,7 @@ from relayer import CROSS_OUT_TOPIC, Relayer, Chain  # noqa: E402
 
 PY = sys.executable
 CLI = os.path.join(ROOT, "node", "cli.py")
-CHAINCTL = os.path.join(ROOT, "bin", "chainctl.exe" if os.name == "nt" else "bin/chainctl")
+CHAINCTL = os.path.join(ROOT, "bin", "chainctl.exe" if os.name == "nt" else "chainctl")
 COIN = 100_000_000
 
 CHAINS = [
@@ -110,7 +110,7 @@ def gen_relayer_key():
 
 
 def main():
-    engine = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "bin/chain-engine")
+    engine = os.path.join(ROOT, "bin", "chain-engine.exe" if os.name == "nt" else "chain-engine")
     if not os.path.exists(engine):
         print("未找到引擎，请先运行 build.sh")
         return 1
